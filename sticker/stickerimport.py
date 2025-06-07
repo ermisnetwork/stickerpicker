@@ -28,7 +28,12 @@ from telethon.tl.types.messages import StickerSet as StickerSetFull
 
 from .lib import util  # Assuming util has helper functions like convert_image
 
-async def reupload_document(client: TelegramClient, document: Document, output_dir: str) -> Tuple[Dict, bytes]:
+async def reupload_document(
+    client: TelegramClient,
+    document: Document,
+    output_dir: str,
+    ext: str
+) -> Tuple[Dict, bytes]:
     print(f"Downloading {document.id}", end="", flush=True)
     data = await client.download_media(document, file=bytes)
     print(".", end="", flush=True)
@@ -36,7 +41,7 @@ async def reupload_document(client: TelegramClient, document: Document, output_d
     print(".", end="", flush=True)
     
     # Save the image locally instead of uploading
-    sticker_filename = f"{document.id}.png"
+    sticker_filename = f"{document.id}.{ext}"
     sticker_path = os.path.join(output_dir, 'thumbnails', sticker_filename)
     web_relative_path = f"packs/thumbnails/{sticker_filename}"
     with open(sticker_path, "wb") as f:
@@ -66,7 +71,11 @@ def add_meta(document: Document, info: Dict, pack: StickerSetFull) -> None:
         "emoticons": [],
     }
 
-async def reupload_pack(client: TelegramClient, pack: StickerSetFull, output_dir: str) -> None:
+async def reupload_pack(
+    client: TelegramClient,
+    pack: StickerSetFull,
+    output_dir: str, ext: str
+) -> None:
     pack_path = os.path.join(output_dir, f"{pack.set.short_name}.json")
     os.makedirs(os.path.join(output_dir, 'thumbnails'), exist_ok=True)
     try:
@@ -94,7 +103,7 @@ async def reupload_pack(client: TelegramClient, pack: StickerSetFull, output_dir
             reuploaded_documents[document.id] = already_uploaded[document.id]
             print(f"Skipped processing {document.id}")
         except KeyError:
-            reuploaded_documents[document.id], data = await reupload_document(client, document, output_dir)
+            reuploaded_documents[document.id], data = await reupload_document(client, document, output_dir, ext)
         add_meta(document, reuploaded_documents[document.id], pack)
         stickers_data[reuploaded_documents[document.id]["url"]] = data
 
@@ -129,6 +138,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument("--list", help="List your saved sticker packs", action="store_true")
 parser.add_argument("--session", help="Telethon session file name", default="sticker-import")
 parser.add_argument("--output-dir", help="Directory to write packs to", default="web/packs", type=str)
+parser.add_argument("--ext", help="Output image format (png, webp, or jpg)", choices=["png", "webp", "jpg"], default="webp")
 parser.add_argument("pack", help="Sticker pack URLs to import", action="append", nargs="*")
 
 async def main(args: argparse.Namespace) -> None:
@@ -154,7 +164,7 @@ async def main(args: argparse.Namespace) -> None:
             input_packs.append(InputStickerSetShortName(short_name=match.group(1)))
         for input_pack in input_packs:
             pack: StickerSetFull = await client(GetStickerSetRequest(input_pack, hash=0))
-            await reupload_pack(client, pack, args.output_dir)
+            await reupload_pack(client, pack, args.output_dir, args.ext)
     else:
         parser.print_help()
 
