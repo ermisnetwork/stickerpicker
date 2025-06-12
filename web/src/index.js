@@ -357,19 +357,56 @@ const scrollToSection = (evt, id) => {
 	evt?.preventDefault()
 }
 
-const NavBarItem = ({pack, iconOverride = null, onClickOverride = null, extraClass = null}) => html`
-	<a href="#pack-${pack.id}" id="nav-${pack.id}" data-pack-id=${pack.id} title=${pack.title} class="${extraClass}"
-	   onClick=${onClickOverride ? (evt => onClickOverride(evt, pack.id)) : (isMobileSafari ? (evt => scrollToSection(evt, pack.id)) : undefined)}>
-		<div class="sticker">
-			${iconOverride ? html`
-				<span class="icon icon-${iconOverride}"/>
-			` : html`
-				<img src=${makeThumbnailURL(pack.stickers[0].url)}
-					alt=${pack.stickers[0].body} class="visible" />
-			`}
-		</div>
-	</a>
-`
+const NavBarItem = ({ pack, iconOverride = null, onClickOverride = null, extraClass = null }) => {
+	const hasStickers = Array.isArray(pack.stickers) && pack.stickers.length > 0
+	const sticker = hasStickers ? pack.stickers[0] : null
+	const isTgs = sticker?.url?.endsWith('.tgs')
+
+	const tgsRef = (el) => {
+		if (!el || !isTgs || el.dataset.loaded) return
+		el.dataset.loaded = '1'
+
+		fetch(sticker.url)
+			.then(res => res.arrayBuffer())
+			.then(buffer => {
+				const decompressed = window.pako.ungzip(new Uint8Array(buffer))
+				const animationData = JSON.parse(new TextDecoder().decode(decompressed))
+
+				window.lottie.loadAnimation({
+					container: el,
+					renderer: 'canvas',
+					loop: true,
+					autoplay: true,
+					animationData,
+					rendererSettings: {
+						useWebWorker: true,
+						clearCanvas: true,
+						progressiveLoad: false,
+					},
+				})
+			})
+			.catch(err => {
+				console.error('NavBarItem TGS load error:', err)
+			})
+	}
+
+	return html`
+		<a href="#pack-${pack.id}" id="nav-${pack.id}" data-pack-id=${pack.id} title=${pack.title} class="${extraClass}"
+		   onClick=${onClickOverride ? (evt => onClickOverride(evt, pack.id)) : (isMobileSafari ? (evt => scrollToSection(evt, pack.id)) : undefined)}>
+			<div class="sticker">
+				${iconOverride ? html`
+					<span class="icon icon-${iconOverride}"/>
+				` : !hasStickers ? html`
+					<span class="icon icon-placeholder"/>
+				` : isTgs ? html`
+					<div ref=${tgsRef} class="tgs-container" title=${sticker.body}></div>
+				` : html`
+					<img src=${makeThumbnailURL(sticker.url)} alt=${sticker.body} class="visible" />
+				`}
+			</div>
+		</a>
+	`
+}
 
 const Pack = ({pack, send}) => html`
 	<section class="stickerpack" id="pack-${pack.id}" data-pack-id=${pack.id}>
@@ -382,10 +419,73 @@ const Pack = ({pack, send}) => html`
 	</section>
 `
 
-const Sticker = ({content, send}) => html`
-	<div class="sticker" onClick=${send} data-sticker-id=${content.id}>
-		<img data-src=${makeThumbnailURL(content.url)} alt=${content.body} title=${content.body}/>
-	</div>
-`
+const observeWhenVisible = (el, callback) => {
+	if (!('IntersectionObserver' in window)) {
+		callback()
+		return
+	}
+
+	const observer = new IntersectionObserver((entries, obs) => {
+		for (const entry of entries) {
+			if (entry.isIntersecting) {
+				callback()
+				obs.disconnect()
+				break
+			}
+		}
+	})
+	observer.observe(el)
+}
+
+const Sticker = ({ content, send }) => {
+	const isTgs = content.url.endsWith('.tgs')
+
+	const tgsRef = (el) => {
+		if (!el || !isTgs) return
+
+		if (el.dataset.loaded) return
+
+		observeWhenVisible(el, () => {
+			el.dataset.loaded = '1'
+
+			fetch(content.url)
+				.then(res => res.arrayBuffer())
+				.then(buffer => {
+					const decompressed = window.pako.ungzip(new Uint8Array(buffer))
+					const animationData = JSON.parse(new TextDecoder().decode(decompressed))
+
+					window.lottie.loadAnimation({
+						container: el,
+						renderer: 'canvas',
+						loop: true,
+						autoplay: true,
+						animationData,
+						rendererSettings: {
+							useWebWorker: true,
+							clearCanvas: true,
+							progressiveLoad: false,
+						},
+					})
+				})
+				.catch(err => {
+					console.error('Tgs load error:', err)
+				})
+		})
+	}
+
+	if (isTgs) {
+		return html`
+			<div class="sticker tgs-sticker" onClick=${send} data-sticker-id=${content.id}>
+				<div ref=${tgsRef} class="tgs-container" title=${content.body}></div>
+			</div>
+		`
+	}
+
+	return html`
+		<div class="sticker" onClick=${send} data-sticker-id=${content.id}>
+			<img loading="lazy" data-src=${makeThumbnailURL(content.url)} alt=${content.body} title=${content.body} />
+		</div>
+	`
+}
 
 render(html`<${App}/>`, document.body)

@@ -68,7 +68,7 @@ def remove_sticker_pack(pack_name) -> None:
                 sticker_id = telegram.get("id")
                 if sticker_id:
                     # Find and delete matching files in thumbnails directory
-                    for ext in ['webp', 'png', 'jpg', 'jpeg', 'gif']:  # Possible extensions
+                    for ext in ['webp', 'png', 'jpg', 'jpeg', 'gif', 'tgs']:  # Possible extensions
                         thumbnail_file = thumbnails_path / f"{sticker_id}.{ext}"
                         try:
                             if thumbnail_file.exists():
@@ -145,7 +145,7 @@ def remove_all_sticker_packs() -> None:
                     sticker_id = telegram.get("id")
                     if sticker_id:
                         # Find and delete matching files in thumbnails directory
-                        for ext in ['webp', 'png', 'jpg', 'jpeg', 'gif']:  # Possible extensions
+                        for ext in ['webp', 'png', 'jpg', 'jpeg', 'gif', 'tgs']:  # Possible extensions
                             thumbnail_file = thumbnails_path / f"{sticker_id}.{ext}"
                             try:
                                 if thumbnail_file.exists():

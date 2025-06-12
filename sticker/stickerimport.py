@@ -37,18 +37,24 @@ async def reupload_document(
     print(f"Downloading {document.id}", end="", flush=True)
     data = await client.download_media(document, file=bytes)
     print(".", end="", flush=True)
-    data, width, height = util.convert_image(data)
+
+    is_tgs = document.mime_type == "application/x-tgsticker"
+
+    if is_tgs:
+        width, height = 512, 512
+    else:
+        data, width, height = util.convert_image(data)
     print(".", end="", flush=True)
-    
-    # Save the image locally instead of uploading
-    sticker_filename = f"{document.id}.{ext}"
+
+    sticker_ext = "tgs" if is_tgs else ext
+    sticker_filename = f"{document.id}.{sticker_ext}"
     sticker_path = os.path.join(output_dir, 'thumbnails', sticker_filename)
     web_relative_path = f"packs/thumbnails/{sticker_filename}"
+
     with open(sticker_path, "wb") as f:
         f.write(data)
     print(".", flush=True)
-    
-    # Return a dictionary with local file path instead of MXC URL
+
     return {
         "url": web_relative_path,
         "width": width,
@@ -138,7 +144,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument("--list", help="List your saved sticker packs", action="store_true")
 parser.add_argument("--session", help="Telethon session file name", default="sticker-import")
 parser.add_argument("--output-dir", help="Directory to write packs to", default="web/packs", type=str)
-parser.add_argument("--ext", help="Output image format (png, webp, or jpg)", choices=["png", "webp", "jpg"], default="webp")
+parser.add_argument("--ext", help="Output image format (png, webp, or jpg)", choices=["png", "webp", "jpg", "webm", "tgs"], default="webp")
 parser.add_argument("pack", help="Sticker pack URLs to import", action="append", nargs="*")
 
 async def main(args: argparse.Namespace) -> None:

@@ -49,3 +49,11 @@ To remove **all** sticker packs, use:
 ```bash
 python -m sticker.stickerremove --all
 ```
+
+
+### Add Animated Stickers
+To add animated stickers, run:
+```bash
+python -m sticker.animatedstickerimport <link1> <link2> ...
+```
+!Note: Do not use `--ext` for animated stickers.
