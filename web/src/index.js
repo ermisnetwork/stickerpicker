@@ -46,6 +46,9 @@ const defaultState = {
 	},
 }
 
+// A map to keep track of which TGS animations have been loaded
+const loadedTgsMap = new WeakMap()
+
 class App extends Component {
 	constructor(props) {
 		super(props)
@@ -363,8 +366,8 @@ const NavBarItem = ({ pack, iconOverride = null, onClickOverride = null, extraCl
 	const isTgs = sticker?.url?.endsWith('.tgs')
 
 	const tgsRef = (el) => {
-		if (!el || !isTgs || el.dataset.loaded) return
-		el.dataset.loaded = '1'
+		if (!el || !isTgs || loadedTgsMap.has(el)) return
+		loadedTgsMap.set(el, true)
 
 		fetch(sticker.url)
 			.then(res => res.arrayBuffer())
@@ -441,9 +444,8 @@ const Sticker = ({ content, send }) => {
 	const isTgs = content.url.endsWith('.tgs')
 
 	const tgsRef = (el) => {
-		if (!el || !isTgs) return
-
-		if (el.dataset.loaded) return
+		if (!el || !isTgs || loadedTgsMap.has(el)) return
+		loadedTgsMap.set(el, true)
 
 		observeWhenVisible(el, () => {
 			el.dataset.loaded = '1'
