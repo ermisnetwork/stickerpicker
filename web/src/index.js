@@ -343,10 +343,8 @@ class App extends Component {
 
 		// Keep focus on search input if it was focused
 		const searchInput = document.querySelector(".search-box input");
-		if (searchInput && document.activeElement === searchInput) {
-			setTimeout(() => {
-				searchInput.focus();
-			}, 10);
+		if (searchInput) {
+			searchInput.focus();
 		}
 	}
 
@@ -501,7 +499,7 @@ const scrollToSection = (evt, id) => {
 	evt?.preventDefault();
 
 	const searchInput = document.querySelector(".search-box input");
-	if (searchInput && document.activeElement === searchInput) {
+	if (searchInput) {
 		setTimeout(() => {
 			searchInput.focus();
 		}, 100);
