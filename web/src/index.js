@@ -13,30 +13,33 @@
 //
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
-import {html, render, Component} from "../lib/htm/preact.js"
-import {Spinner} from "./spinner.js"
-import {SearchBox} from "./search-box.js"
-import {giphyIsEnabled, GiphySearchTab, setGiphyAPIKey} from "./giphy.js"
-import * as widgetAPI from "./widget-api.js"
-import * as frequent from "./frequently-used.js"
+import { html, render, Component } from "../lib/htm/preact.js";
+import { Spinner } from "./spinner.js";
+import { SearchBox } from "./search-box.js";
+import { giphyIsEnabled, GiphySearchTab, setGiphyAPIKey } from "./giphy.js";
+import * as widgetAPI from "./widget-api.js";
+import * as frequent from "./frequently-used.js";
 
 // The base URL for fetching packs. The app will first fetch ${PACK_BASE_URL}/index.json,
 // then ${PACK_BASE_URL}/${packFile} for each packFile in the packs object of the index.json file.
-const PACKS_BASE_URL = "packs"
+const PACKS_BASE_URL = "packs";
 
-let INDEX = `${PACKS_BASE_URL}/index.json`
-const params = new URLSearchParams(document.location.search)
-if (params.has('config')) {
-	INDEX = params.get("config")
+let INDEX = `${PACKS_BASE_URL}/index.json`;
+const params = new URLSearchParams(document.location.search);
+if (params.has("config")) {
+	INDEX = params.get("config");
 }
 
-const makeThumbnailURL = mxc => `${PACKS_BASE_URL}/thumbnails/${mxc.split("/").slice(-1)[0]}`
+const makeThumbnailURL = (mxc) =>
+	`${PACKS_BASE_URL}/thumbnails/${mxc.split("/").slice(-1)[0]}`;
 
 // We need to detect iOS webkit because it has a bug related to scrolling non-fixed divs
 // This is also used to fix scrolling to sections on Element iOS
-const isMobileSafari = navigator.userAgent.match(/(iPod|iPhone|iPad)/) && navigator.userAgent.match(/AppleWebKit/)
+const isMobileSafari =
+	navigator.userAgent.match(/(iPod|iPhone|iPad)/) &&
+	navigator.userAgent.match(/AppleWebKit/);
 
-const supportedThemes = ["light", "dark", "black"]
+const supportedThemes = ["light", "dark", "black"];
 
 const defaultState = {
 	packs: [],
@@ -44,21 +47,35 @@ const defaultState = {
 		searchTerm: "",
 		packs: [],
 	},
-}
+};
 
 // A map to keep track of which TGS animations have been loaded
-const loadedTgsMap = new WeakMap()
+const loadedTgsMap = new WeakMap();
+
+const HIDE_SETTINGS = params.has("hideSettings");
+
+const CUSTOM_COLUMNS = params.has("columns")
+	? parseInt(params.get("columns"), 10)
+	: null;
+
+const CUSTOM_NAV_SIZE = params.has("navSize")
+	? parseInt(params.get("navSize"), 10)
+	: null;
 
 class App extends Component {
 	constructor(props) {
-		super(props)
-		this.defaultTheme = params.get("theme")
+		super(props);
+		this.defaultTheme = params.get("theme");
 		this.state = {
 			viewingGifs: false,
 			packs: defaultState.packs,
 			loading: true,
 			error: null,
-			stickersPerRow: parseInt(localStorage.mauStickersPerRow || "4"),
+			stickersPerRow:
+				CUSTOM_COLUMNS ||
+				parseInt(localStorage.mauStickersPerRow || "4"),
+			navSize: CUSTOM_NAV_SIZE || 12,
+			hideSettings: HIDE_SETTINGS,
 			theme: localStorage.mauStickerThemeOverride || this.defaultTheme,
 			frequentlyUsed: {
 				id: "frequently-used",
@@ -67,279 +84,403 @@ class App extends Component {
 				stickers: [],
 			},
 			filtering: defaultState.filtering,
-		}
+		};
 		if (!supportedThemes.includes(this.state.theme)) {
-			this.state.theme = "light"
+			this.state.theme = "light";
 		}
 		if (!supportedThemes.includes(this.defaultTheme)) {
-			this.defaultTheme = "light"
+			this.defaultTheme = "light";
 		}
-		this.stickersByID = new Map(JSON.parse(localStorage.mauFrequentlyUsedStickerCache || "[]"))
-		this.state.frequentlyUsed.stickers = this._getStickersByID(this.state.frequentlyUsed.stickerIDs)
-		this.imageObserver = null
-		this.packListRef = null
-		this.navRef = null
-		this.searchStickers = this.searchStickers.bind(this)
-		this.sendSticker = this.sendSticker.bind(this)
-		this.navScroll = this.navScroll.bind(this)
-		this.reloadPacks = this.reloadPacks.bind(this)
-		this.observeSectionIntersections = this.observeSectionIntersections.bind(this)
-		this.observeImageIntersections = this.observeImageIntersections.bind(this)
+		this.stickersByID = new Map(
+			JSON.parse(localStorage.mauFrequentlyUsedStickerCache || "[]")
+		);
+		this.state.frequentlyUsed.stickers = this._getStickersByID(
+			this.state.frequentlyUsed.stickerIDs
+		);
+		this.imageObserver = null;
+		this.packListRef = null;
+		this.navRef = null;
+		this.searchStickers = this.searchStickers.bind(this);
+		this.sendSticker = this.sendSticker.bind(this);
+		this.navScroll = this.navScroll.bind(this);
+		this.reloadPacks = this.reloadPacks.bind(this);
+		this.observeSectionIntersections =
+			this.observeSectionIntersections.bind(this);
+		this.observeImageIntersections =
+			this.observeImageIntersections.bind(this);
 	}
 
 	_getStickersByID(ids) {
-		return ids.map(id => this.stickersByID.get(id)).filter(sticker => !!sticker)
+		return ids
+			.map((id) => this.stickersByID.get(id))
+			.filter((sticker) => !!sticker);
+	}
+
+	setNavSize(val) {
+		document.documentElement.style.setProperty(
+			"--nav-sticker-size",
+			`${val}vw`
+		);
+		this.setState({
+			navSize: val,
+		});
 	}
 
 	updateFrequentlyUsed() {
-		const stickerIDs = frequent.get()
-		const stickers = this._getStickersByID(stickerIDs)
+		const stickerIDs = frequent.get();
+		const stickers = this._getStickersByID(stickerIDs);
 		this.setState({
 			frequentlyUsed: {
 				...this.state.frequentlyUsed,
 				stickerIDs,
 				stickers,
 			},
-		})
-		localStorage.mauFrequentlyUsedStickerCache = JSON.stringify(stickers.map(sticker => [sticker.id, sticker]))
+		});
+		localStorage.mauFrequentlyUsedStickerCache = JSON.stringify(
+			stickers.map((sticker) => [sticker.id, sticker])
+		);
 	}
 
 	searchStickers(e) {
-		const sanitizeString = s => s.toLowerCase().trim()
-		const searchTerm = sanitizeString(e.target.value)
+		const sanitizeString = (s) => s.toLowerCase().trim();
+		const searchTerm = sanitizeString(e.target.value);
 
-		const allPacks = [this.state.frequentlyUsed, ...this.state.packs]
-		const packsWithFilteredStickers = allPacks.map(pack => ({
+		const allPacks = [this.state.frequentlyUsed, ...this.state.packs];
+		const packsWithFilteredStickers = allPacks.map((pack) => ({
 			...pack,
-			stickers: pack.stickers.filter(sticker =>
-				sanitizeString(sticker.body).includes(searchTerm) ||
-				sanitizeString(sticker.id).includes(searchTerm)
+			stickers: pack.stickers.filter(
+				(sticker) =>
+					sanitizeString(sticker.body).includes(searchTerm) ||
+					sanitizeString(sticker.id).includes(searchTerm)
 			),
-		}))
+		}));
 
 		this.setState({
 			filtering: {
 				...this.state.filtering,
 				searchTerm,
-				packs: packsWithFilteredStickers.filter(({stickers}) => !!stickers.length),
+				packs: packsWithFilteredStickers.filter(
+					({ stickers }) => !!stickers.length
+				),
 			},
-		})
+		});
 	}
 
 	setStickersPerRow(val) {
-		localStorage.mauStickersPerRow = val
-		document.documentElement.style.setProperty("--stickers-per-row", localStorage.mauStickersPerRow)
+		localStorage.mauStickersPerRow = val;
+		document.documentElement.style.setProperty(
+			"--stickers-per-row",
+			localStorage.mauStickersPerRow
+		);
 		this.setState({
 			stickersPerRow: val,
-		})
-		this.packListRef.scrollTop = this.packListRef.scrollHeight
+		});
+		this.packListRef.scrollTop = this.packListRef.scrollHeight;
 	}
 
 	setTheme(theme) {
 		if (theme === "default") {
-			delete localStorage.mauStickerThemeOverride
-			this.setState({theme: this.defaultTheme})
+			delete localStorage.mauStickerThemeOverride;
+			this.setState({ theme: this.defaultTheme });
 		} else {
-			localStorage.mauStickerThemeOverride = theme
-			this.setState({theme: theme})
+			localStorage.mauStickerThemeOverride = theme;
+			this.setState({ theme: theme });
 		}
 	}
 
 	reloadPacks() {
-		this.imageObserver.disconnect()
-		this.sectionObserver.disconnect()
+		this.imageObserver.disconnect();
+		this.sectionObserver.disconnect();
 		this.setState({
 			packs: defaultState.packs,
 			filtering: defaultState.filtering,
-		})
-		this._loadPacks(true)
+		});
+		this._loadPacks(true);
 	}
 
 	_loadPacks(disableCache = false) {
-		const cache = disableCache ? "no-cache" : undefined
-		fetch(INDEX, {cache}).then(async indexRes => {
-			if (indexRes.status >= 400) {
-				this.setState({
-					loading: false,
-					error: indexRes.status !== 404 ? indexRes.statusText : null,
-				})
-				return
-			}
-			const indexData = await indexRes.json()
-			if (indexData.giphy_api_key !== undefined) {
-				setGiphyAPIKey(indexData.giphy_api_key, indexData.giphy_mxc_prefix)
-			}
-			// TODO only load pack metadata when scrolled into view?
-			for (const packFile of indexData.packs) {
-				let packRes
-				if (packFile.startsWith("https://") || packFile.startsWith("http://")) {
-					packRes = await fetch(packFile, {cache})
-				} else {
-					packRes = await fetch(`${PACKS_BASE_URL}/${packFile}`, {cache})
+		const cache = disableCache ? "no-cache" : undefined;
+		fetch(INDEX, { cache }).then(
+			async (indexRes) => {
+				if (indexRes.status >= 400) {
+					this.setState({
+						loading: false,
+						error:
+							indexRes.status !== 404
+								? indexRes.statusText
+								: null,
+					});
+					return;
 				}
-				const packData = await packRes.json()
-				for (const sticker of packData.stickers) {
-					this.stickersByID.set(sticker.id, sticker)
+				const indexData = await indexRes.json();
+				if (indexData.giphy_api_key !== undefined) {
+					setGiphyAPIKey(
+						indexData.giphy_api_key,
+						indexData.giphy_mxc_prefix
+					);
 				}
-				this.setState({
-					packs: [...this.state.packs, packData],
-					loading: false,
-				})
-			}
-			this.updateFrequentlyUsed()
-		}, error => this.setState({loading: false, error}))
+				// TODO only load pack metadata when scrolled into view?
+				for (const packFile of indexData.packs) {
+					let packRes;
+					if (
+						packFile.startsWith("https://") ||
+						packFile.startsWith("http://")
+					) {
+						packRes = await fetch(packFile, { cache });
+					} else {
+						packRes = await fetch(`${PACKS_BASE_URL}/${packFile}`, {
+							cache,
+						});
+					}
+					const packData = await packRes.json();
+					for (const sticker of packData.stickers) {
+						this.stickersByID.set(sticker.id, sticker);
+					}
+					this.setState({
+						packs: [...this.state.packs, packData],
+						loading: false,
+					});
+				}
+				this.updateFrequentlyUsed();
+			},
+			(error) => this.setState({ loading: false, error })
+		);
 	}
 
 	componentDidMount() {
-		document.documentElement.style.setProperty("--stickers-per-row", this.state.stickersPerRow.toString())
-		this._loadPacks()
-		this.imageObserver = new IntersectionObserver(this.observeImageIntersections, {
-			rootMargin: "100px",
-		})
-		this.sectionObserver = new IntersectionObserver(this.observeSectionIntersections)
+		document.documentElement.style.setProperty(
+			"--stickers-per-row",
+			this.state.stickersPerRow.toString()
+		);
+		document.documentElement.style.setProperty(
+			"--nav-sticker-size",
+			`${this.state.navSize}vw`
+		);
+		this._loadPacks();
+		this.imageObserver = new IntersectionObserver(
+			this.observeImageIntersections,
+			{
+				rootMargin: "100px",
+			}
+		);
+		this.sectionObserver = new IntersectionObserver(
+			this.observeSectionIntersections
+		);
 	}
 
 	observeImageIntersections(intersections) {
 		for (const entry of intersections) {
-			const img = entry.target.children.item(0)
+			const img = entry.target.children.item(0);
 			if (entry.isIntersecting) {
-				img.setAttribute("src", img.getAttribute("data-src"))
-				img.classList.add("visible")
+				img.setAttribute("src", img.getAttribute("data-src"));
+				img.classList.add("visible");
 			} else {
-				img.removeAttribute("src")
-				img.classList.remove("visible")
+				img.removeAttribute("src");
+				img.classList.remove("visible");
 			}
 		}
 	}
 
 	observeSectionIntersections(intersections) {
-		const navWidth = this.navRef.getBoundingClientRect().width
-		let minX = 0, maxX = navWidth
-		let minXElem = null
-		let maxXElem = null
+		const navWidth = this.navRef.getBoundingClientRect().width;
+		let minX = 0,
+			maxX = navWidth;
+		let minXElem = null;
+		let maxXElem = null;
 		for (const entry of intersections) {
-			const packID = entry.target.getAttribute("data-pack-id")
+			const packID = entry.target.getAttribute("data-pack-id");
 			if (!packID) {
-				continue
+				continue;
 			}
-			const navElement = document.getElementById(`nav-${packID}`)
+			const navElement = document.getElementById(`nav-${packID}`);
 			if (entry.isIntersecting) {
-				navElement.classList.add("visible")
-				const bb = navElement.getBoundingClientRect()
+				navElement.classList.add("visible");
+				const bb = navElement.getBoundingClientRect();
 				if (bb.x < minX) {
-					minX = bb.x
-					minXElem = navElement
+					minX = bb.x;
+					minXElem = navElement;
 				} else if (bb.right > maxX) {
-					maxX = bb.right
-					maxXElem = navElement
+					maxX = bb.right;
+					maxXElem = navElement;
 				}
 			} else {
-				navElement.classList.remove("visible")
+				navElement.classList.remove("visible");
 			}
 		}
 		if (minXElem !== null) {
-			minXElem.scrollIntoView({inline: "start"})
+			minXElem.scrollIntoView({ inline: "start" });
 		} else if (maxXElem !== null) {
-			maxXElem.scrollIntoView({inline: "end"})
+			maxXElem.scrollIntoView({ inline: "end" });
 		}
 	}
 
 	componentDidUpdate() {
 		if (this.packListRef === null) {
-			return
+			return;
 		}
 		for (const elem of this.packListRef.getElementsByClassName("sticker")) {
-			this.imageObserver.observe(elem)
+			this.imageObserver.observe(elem);
 		}
 		for (const elem of this.packListRef.children) {
-			this.sectionObserver.observe(elem)
+			this.sectionObserver.observe(elem);
 		}
 	}
 
 	componentWillUnmount() {
-		this.imageObserver.disconnect()
-		this.sectionObserver.disconnect()
+		this.imageObserver.disconnect();
+		this.sectionObserver.disconnect();
 	}
 
 	sendSticker(evt) {
-		const id = evt.currentTarget.getAttribute("data-sticker-id")
-		const sticker = this.stickersByID.get(id)
-		frequent.add(id)
-		this.updateFrequentlyUsed()
-		widgetAPI.sendSticker(sticker)
+		evt.preventDefault();
+		evt.stopPropagation();
+
+		const id = evt.currentTarget.getAttribute("data-sticker-id");
+		const sticker = this.stickersByID.get(id);
+		frequent.add(id);
+		this.updateFrequentlyUsed();
+		widgetAPI.sendSticker(sticker);
+
+		// Keep focus on search input if it was focused
+		const searchInput = document.querySelector(".search-box input");
+		if (searchInput && document.activeElement === searchInput) {
+			setTimeout(() => {
+				searchInput.focus();
+			}, 10);
+		}
 	}
 
 	navScroll(evt) {
-		this.navRef.scrollLeft += evt.deltaY
+		this.navRef.scrollLeft += evt.deltaY;
 	}
 
 	render() {
-		const theme = `theme-${this.state.theme}`
-		const filterActive = !!this.state.filtering.searchTerm
+		const theme = `theme-${this.state.theme}`;
+		const filterActive = !!this.state.filtering.searchTerm;
 		const packs = filterActive
 			? this.state.filtering.packs
-			: [this.state.frequentlyUsed, ...this.state.packs]
+			: [this.state.frequentlyUsed, ...this.state.packs];
 
 		if (this.state.loading) {
 			return html`
 				<main class="spinner ${theme}">
-					<${Spinner} size=${80} green/>
+					<${Spinner} size=${80} green />
 				</main>
-			`
+			`;
 		} else if (this.state.error) {
 			return html`
 				<main class="error ${theme}">
 					<h1>Failed to load packs</h1>
 					<p>${this.state.error}</p>
 				</main>
-			`
+			`;
 		} else if (this.state.packs.length === 0) {
 			return html`
 				<main class="empty ${theme}"><h1>No packs found 😿</h1></main>
-			`
+			`;
 		}
 
-		const onClickOverride = null
-		const switchToGiphy = () => this.setState({viewingGifs: true, filtering: defaultState.filtering})
+		const onClickOverride = null;
+		const switchToGiphy = () =>
+			this.setState({
+				viewingGifs: true,
+				filtering: defaultState.filtering,
+			});
 
-		return html`
-			<main class="has-content ${theme}">
-				<nav onWheel=${this.navScroll} ref=${elem => this.navRef = elem}>
-					<${NavBarItem} pack=${this.state.frequentlyUsed} iconOverride="recent" onClickOverride=${onClickOverride}/>
-					${this.state.packs.map(pack => html`<${NavBarItem} id=${pack.id} pack=${pack} onClickOverride=${onClickOverride}/>`)}
-					<${NavBarItem} pack=${{id: "settings", title: "Settings"}} iconOverride="settings" onClickOverride=${onClickOverride}/>
-				</nav>
+		return html` <main class="has-content ${theme}">
+			<nav
+				onWheel=${this.navScroll}
+				ref=${(elem) => (this.navRef = elem)}
+			>
+				<${NavBarItem}
+					pack=${this.state.frequentlyUsed}
+					iconOverride="recent"
+					onClickOverride=${onClickOverride}
+				/>
+				${this.state.packs.map(
+					(pack) =>
+						html`<${NavBarItem}
+							id=${pack.id}
+							pack=${pack}
+							onClickOverride=${onClickOverride}
+						/>`
+				)}
+				${!this.state.hideSettings
+					? html`
+							<${NavBarItem}
+								pack=${{ id: "settings", title: "Settings" }}
+								iconOverride="settings"
+								onClickOverride=${onClickOverride}
+							/>
+					  `
+					: null}
+			</nav>
 
-				${this.state.viewingGifs ? html`
-					<${GiphySearchTab}/>
-				` : html`
-					<${SearchBox} onInput=${this.searchStickers} value=${this.state.filtering.searchTerm ?? ""}/>
-					<div class="pack-list ${isMobileSafari ? "ios-safari-hack" : ""}" ref=${(elem) => (this.packListRef = elem)}>
-						${filterActive && packs.length === 0
-							? html`<div class="search-empty"><h1>No stickers match your search</h1></div>`
-							: null}
-						${packs.map((pack) => html`<${Pack} id=${pack.id} pack=${pack} send=${this.sendSticker}/>`)}
-						<${Settings} app=${this}/>
-					</div>
-				`}
-			</main>`
+			${this.state.viewingGifs
+				? html` <${GiphySearchTab} /> `
+				: html`
+						<${SearchBox}
+							onInput=${this.searchStickers}
+							value=${this.state.filtering.searchTerm ?? ""}
+						/>
+						<div
+							class="pack-list ${isMobileSafari
+								? "ios-safari-hack"
+								: ""}"
+							ref=${(elem) => (this.packListRef = elem)}
+						>
+							${filterActive && packs.length === 0
+								? html`<div class="search-empty">
+										<h1>No stickers match your search</h1>
+								  </div>`
+								: null}
+							${packs.map(
+								(pack) =>
+									html`<${Pack}
+										id=${pack.id}
+										pack=${pack}
+										send=${this.sendSticker}
+									/>`
+							)}
+							${!this.state.hideSettings
+								? html`<${Settings} app=${this} />`
+								: null}
+						</div>
+				  `}
+		</main>`;
 	}
 }
 
-const Settings = ({app}) => html`
-	<section class="stickerpack settings" id="pack-settings" data-pack-id="settings">
+const Settings = ({ app }) => html`
+	<section
+		class="stickerpack settings"
+		id="pack-settings"
+		data-pack-id="settings"
+	>
 		<h1>Settings</h1>
 		<div class="settings-list">
 			<button onClick=${app.reloadPacks}>Reload</button>
 			<div>
-				<label for="stickers-per-row">Stickers per row: ${app.state.stickersPerRow}</label>
-				<input type="range" min=2 max=10 id="stickers-per-row" id="stickers-per-row"
+				<label for="stickers-per-row"
+					>Stickers per row: ${app.state.stickersPerRow}</label
+				>
+				<input
+					type="range"
+					min="2"
+					max="10"
+					id="stickers-per-row"
+					id="stickers-per-row"
 					value=${app.state.stickersPerRow}
-					onInput=${evt => app.setStickersPerRow(evt.target.value)}/>
+					onInput=${(evt) => app.setStickersPerRow(evt.target.value)}
+				/>
 			</div>
 			<div>
 				<label for="theme">Theme: </label>
-				<select name="theme" id="theme" onChange=${evt => app.setTheme(evt.target.value)}>
+				<select
+					name="theme"
+					id="theme"
+					onChange=${(evt) => app.setTheme(evt.target.value)}
+				>
 					<option value="default">Default</option>
 					<option value="light">Light</option>
 					<option value="dark">Dark</option>
@@ -348,36 +489,51 @@ const Settings = ({app}) => html`
 			</div>
 		</div>
 	</section>
-`
+`;
 
 // By default we just let the browser handle scrolling to sections, but webviews on Element iOS
 // open the link in the browser instead of just scrolling there, so we need to scroll manually:
 const scrollToSection = (evt, id) => {
-	const pack = document.getElementById(`pack-${id}`)
+	const pack = document.getElementById(`pack-${id}`);
 	if (pack) {
-		pack.scrollIntoView({block: "start", behavior: "instant"})
+		pack.scrollIntoView({ block: "start", behavior: "instant" });
 	}
-	evt?.preventDefault()
-}
+	evt?.preventDefault();
 
-const NavBarItem = ({ pack, iconOverride = null, onClickOverride = null, extraClass = null }) => {
-	const hasStickers = Array.isArray(pack.stickers) && pack.stickers.length > 0
-	const sticker = hasStickers ? pack.stickers[0] : null
-	const isTgs = sticker?.url?.endsWith('.tgs')
+	const searchInput = document.querySelector(".search-box input");
+	if (searchInput && document.activeElement === searchInput) {
+		setTimeout(() => {
+			searchInput.focus();
+		}, 100);
+	}
+};
+
+const NavBarItem = ({
+	pack,
+	iconOverride = null,
+	onClickOverride = null,
+	extraClass = null,
+}) => {
+	const hasStickers =
+		Array.isArray(pack.stickers) && pack.stickers.length > 0;
+	const sticker = hasStickers ? pack.stickers[0] : null;
+	const isTgs = sticker?.url?.endsWith(".tgs");
 
 	const tgsRef = (el) => {
-		if (!el || !isTgs || loadedTgsMap.has(el)) return
-		loadedTgsMap.set(el, true)
+		if (!el || !isTgs || loadedTgsMap.has(el)) return;
+		loadedTgsMap.set(el, true);
 
 		fetch(sticker.url)
-			.then(res => res.arrayBuffer())
-			.then(buffer => {
-				const decompressed = window.pako.ungzip(new Uint8Array(buffer))
-				const animationData = JSON.parse(new TextDecoder().decode(decompressed))
+			.then((res) => res.arrayBuffer())
+			.then((buffer) => {
+				const decompressed = window.pako.ungzip(new Uint8Array(buffer));
+				const animationData = JSON.parse(
+					new TextDecoder().decode(decompressed)
+				);
 
 				window.lottie.loadAnimation({
 					container: el,
-					renderer: 'canvas',
+					renderer: "canvas",
 					loop: true,
 					autoplay: true,
 					animationData,
@@ -386,79 +542,109 @@ const NavBarItem = ({ pack, iconOverride = null, onClickOverride = null, extraCl
 						clearCanvas: true,
 						progressiveLoad: false,
 					},
-				})
+				});
 			})
-			.catch(err => {
-				console.error('NavBarItem TGS load error:', err)
-			})
-	}
+			.catch((err) => {
+				console.error("NavBarItem TGS load error:", err);
+			});
+	};
 
 	return html`
-		<a href="#pack-${pack.id}" id="nav-${pack.id}" data-pack-id=${pack.id} title=${pack.title} class="${extraClass}"
-		   onClick=${onClickOverride ? (evt => onClickOverride(evt, pack.id)) : (isMobileSafari ? (evt => scrollToSection(evt, pack.id)) : undefined)}>
+		<a
+			href="#pack-${pack.id}"
+			id="nav-${pack.id}"
+			data-pack-id=${pack.id}
+			title=${pack.title}
+			class="${extraClass}"
+			onClick=${onClickOverride
+				? (evt) => onClickOverride(evt, pack.id)
+				: isMobileSafari
+				? (evt) => scrollToSection(evt, pack.id)
+				: undefined}
+		>
 			<div class="sticker">
-				${iconOverride ? html`
-					<span class="icon icon-${iconOverride}"/>
-				` : !hasStickers ? html`
-					<span class="icon icon-placeholder"/>
-				` : isTgs ? html`
-					<div ref=${tgsRef} class="tgs-container" title=${sticker.body}></div>
-				` : html`
-					<img src=${makeThumbnailURL(sticker.url)} alt=${sticker.body} class="visible" />
-				`}
+				${iconOverride
+					? html` <span class="icon icon-${iconOverride}" /> `
+					: !hasStickers
+					? html` <span class="icon icon-placeholder" /> `
+					: isTgs
+					? html`
+							<div
+								ref=${tgsRef}
+								class="tgs-container"
+								title=${sticker.body}
+							></div>
+					  `
+					: html`
+							<img
+								src=${makeThumbnailURL(sticker.url)}
+								alt=${sticker.body}
+								class="visible"
+							/>
+					  `}
 			</div>
 		</a>
-	`
-}
+	`;
+};
 
-const Pack = ({pack, send}) => html`
+const Pack = ({ pack, send }) => html`
 	<section class="stickerpack" id="pack-${pack.id}" data-pack-id=${pack.id}>
 		<h1>${pack.title}</h1>
 		<div class="sticker-list">
-			${pack.stickers.map(sticker => html`
-				<${Sticker} key=${sticker.id} content=${sticker} send=${send}/>
-			`)}
+			${pack.stickers.map(
+				(sticker) => html`
+					<${Sticker}
+						key=${sticker.id}
+						content=${sticker}
+						send=${send}
+					/>
+				`
+			)}
 		</div>
 	</section>
-`
+`;
 
 const observeWhenVisible = (el, callback) => {
-	if (!('IntersectionObserver' in window)) {
-		callback()
-		return
+	if (!("IntersectionObserver" in window)) {
+		callback();
+		return;
 	}
 
 	const observer = new IntersectionObserver((entries, obs) => {
 		for (const entry of entries) {
 			if (entry.isIntersecting) {
-				callback()
-				obs.disconnect()
-				break
+				callback();
+				obs.disconnect();
+				break;
 			}
 		}
-	})
-	observer.observe(el)
-}
+	});
+	observer.observe(el);
+};
 
 const Sticker = ({ content, send }) => {
-	const isTgs = content.url.endsWith('.tgs')
+	const isTgs = content.url.endsWith(".tgs");
 
 	const tgsRef = (el) => {
-		if (!el || !isTgs || loadedTgsMap.has(el)) return
-		loadedTgsMap.set(el, true)
+		if (!el || !isTgs || loadedTgsMap.has(el)) return;
+		loadedTgsMap.set(el, true);
 
 		observeWhenVisible(el, () => {
-			el.dataset.loaded = '1'
+			el.dataset.loaded = "1";
 
 			fetch(content.url)
-				.then(res => res.arrayBuffer())
-				.then(buffer => {
-					const decompressed = window.pako.ungzip(new Uint8Array(buffer))
-					const animationData = JSON.parse(new TextDecoder().decode(decompressed))
+				.then((res) => res.arrayBuffer())
+				.then((buffer) => {
+					const decompressed = window.pako.ungzip(
+						new Uint8Array(buffer)
+					);
+					const animationData = JSON.parse(
+						new TextDecoder().decode(decompressed)
+					);
 
 					window.lottie.loadAnimation({
 						container: el,
-						renderer: 'canvas',
+						renderer: "canvas",
 						loop: true,
 						autoplay: true,
 						animationData,
@@ -467,27 +653,40 @@ const Sticker = ({ content, send }) => {
 							clearCanvas: true,
 							progressiveLoad: false,
 						},
-					})
+					});
 				})
-				.catch(err => {
-					console.error('Tgs load error:', err)
-				})
-		})
-	}
+				.catch((err) => {
+					console.error("Tgs load error:", err);
+				});
+		});
+	};
 
 	if (isTgs) {
 		return html`
-			<div class="sticker tgs-sticker" onClick=${send} data-sticker-id=${content.id}>
-				<div ref=${tgsRef} class="tgs-container" title=${content.body}></div>
+			<div
+				class="sticker tgs-sticker"
+				onClick=${send}
+				data-sticker-id=${content.id}
+			>
+				<div
+					ref=${tgsRef}
+					class="tgs-container"
+					title=${content.body}
+				></div>
 			</div>
-		`
+		`;
 	}
 
 	return html`
 		<div class="sticker" onClick=${send} data-sticker-id=${content.id}>
-			<img loading="lazy" data-src=${makeThumbnailURL(content.url)} alt=${content.body} title=${content.body} />
+			<img
+				loading="lazy"
+				data-src=${makeThumbnailURL(content.url)}
+				alt=${content.body}
+				title=${content.body}
+			/>
 		</div>
-	`
-}
+	`;
+};
 
-render(html`<${App}/>`, document.body)
+render(html`<${App} />`, document.body);

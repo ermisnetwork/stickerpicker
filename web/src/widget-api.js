@@ -13,38 +13,43 @@
 //
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
-let widgetId = null
+let widgetId = null;
 
-window.onmessage = event => {
+window.onmessage = (event) => {
 	if (!window.parent || !event.data) {
-		return
+		return;
 	}
 
-	const request = event.data
-	if (!request.requestId || !request.widgetId || !request.action || request.api !== "toWidget") {
-		return
+	const request = event.data;
+	if (
+		!request.requestId ||
+		!request.widgetId ||
+		!request.action ||
+		request.api !== "toWidget"
+	) {
+		return;
 	}
 
 	if (widgetId) {
 		if (widgetId !== request.widgetId) {
-			return
+			return;
 		}
 	} else {
-		widgetId = request.widgetId
+		widgetId = request.widgetId;
 	}
 
-	let response
+	let response;
 
 	if (request.action === "visibility") {
-		response = {}
+		response = {};
 	} else if (request.action === "capabilities") {
-		response = { capabilities: ["m.sticker"] }
+		response = { capabilities: ["m.sticker"] };
 	} else {
-		response = { error: { message: "Action not supported" } }
+		response = { error: { message: "Action not supported" } };
 	}
 
-	window.parent.postMessage({ ...request, response }, event.origin)
-}
+	window.parent.postMessage({ ...request, response }, event.origin);
+};
 
 export function sendSticker(content) {
 	const data = {
@@ -52,26 +57,29 @@ export function sendSticker(content) {
 		// `name` is for Element Web (and also the spec)
 		// Element Android uses content -> body as the name
 		name: content.body,
-	}
+	};
 	// Custom field that stores the ID even for non-telegram stickers
-	delete data.content.id
+	delete data.content.id;
 
 	// This is for Element iOS
 	const widgetData = {
 		...data,
 		description: content.body,
 		file: content.filename ?? `${content.id}.png`,
-	}
-	delete widgetData.content.filename
+	};
+	delete widgetData.content.filename;
 	// Element iOS explodes if there are extra fields present
-	delete widgetData.content["net.maunium.telegram.sticker"]
+	delete widgetData.content["net.maunium.telegram.sticker"];
 
-	window.parent.postMessage({
-		api: "fromWidget",
-		action: "m.sticker",
-		requestId: `sticker-${Date.now()}`,
-		widgetId,
-		data,
-		widgetData,
-	}, "*")
+	window.parent.postMessage(
+		{
+			api: "fromWidget",
+			action: "m.sticker",
+			requestId: `sticker-${Date.now()}`,
+			widgetId,
+			data,
+			widgetData,
+		},
+		"*"
+	);
 }

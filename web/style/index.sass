@@ -26,8 +26,9 @@ h1
 \:root
   --stickers-per-row: 4
   --sticker-size: calc(100vw / var(--stickers-per-row))
+  --nav-sticker-size: 12vw
 
-$nav-sticker-size: 12vw
+$nav-sticker-size: var(--nav-sticker-size)
 $nav-bottom-highlight: 2px
 $nav-height: calc(#{$nav-sticker-size} + #{$nav-bottom-highlight})
 $nav-height-inverse: calc(-#{$nav-sticker-size} - #{$nav-bottom-highlight})
