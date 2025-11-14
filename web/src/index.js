@@ -274,10 +274,11 @@ class App extends Component {
 			if (entry.isIntersecting) {
 				img.setAttribute("src", img.getAttribute("data-src"));
 				img.classList.add("visible");
-			} else {
-				img.removeAttribute("src");
-				img.classList.remove("visible");
 			}
+			//  else {
+			// 	img.removeAttribute("src");
+			// 	img.classList.remove("visible");
+			// }
 		}
 	}
 
