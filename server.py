@@ -10,9 +10,24 @@ PORT = 8080
 # Mã bảo mật để import sticker (có thể thay đổi qua biến môi trường SECURITY_CODE)
 SECURITY_CODE = os.environ.get("SECURITY_CODE", "uhm2026")
 
+import mimetypes
+
+mimetypes.add_type("video/webm", ".webm")
+mimetypes.add_type("application/json", ".tgs")
+mimetypes.add_type("image/webp", ".webp")
+
 class StickerPickerHandler(http.server.SimpleHTTPRequestHandler):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory="web", **kwargs)
+
+    def guess_type(self, path):
+        if path.endswith(".webm"):
+            return "video/webm"
+        if path.endswith(".tgs"):
+            return "application/json"
+        if path.endswith(".webp"):
+            return "image/webp"
+        return super().guess_type(path)
 
     def end_headers(self):
         # Tự động thêm CORS header cho tất cả phản hồi

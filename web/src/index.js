@@ -278,15 +278,15 @@ class App extends Component {
 
 	observeImageIntersections(intersections) {
 		for (const entry of intersections) {
-			const img = entry.target.children.item(0);
-			if (entry.isIntersecting) {
-				img.setAttribute("src", img.getAttribute("data-src"));
-				img.classList.add("visible");
+			const elem = entry.target.children.item(0);
+			if (entry.isIntersecting && elem) {
+				const dataSrc = elem.getAttribute("data-src");
+				if (dataSrc) {
+					elem.setAttribute("src", dataSrc);
+					elem.removeAttribute("data-src");
+				}
+				elem.classList.add("visible");
 			}
-			//  else {
-			// 	img.removeAttribute("src");
-			// 	img.classList.remove("visible");
-			// }
 		}
 	}
 
@@ -676,6 +676,7 @@ const NavBarItem = ({
 		Array.isArray(pack.stickers) && pack.stickers.length > 0;
 	const sticker = hasStickers ? pack.stickers[0] : null;
 	const isTgs = sticker?.url?.endsWith(".tgs");
+	const isWebm = sticker?.url?.endsWith(".webm");
 
 	const tgsRef = (el) => {
 		if (!el || !isTgs || loadedTgsMap.has(el)) return;
@@ -733,6 +734,18 @@ const NavBarItem = ({
 								title=${sticker.body}
 							></div>
 					  `
+					: isWebm
+					? html`
+							<video
+								src=${makeThumbnailURL(sticker.url)}
+								autoplay
+								loop
+								muted
+								playsinline
+								class="visible"
+								style="width: 100%; height: 100%; object-fit: contain; pointer-events: none;"
+							></video>
+					  `
 					: html`
 							<img
 								src=${makeThumbnailURL(sticker.url)}
@@ -782,6 +795,7 @@ const observeWhenVisible = (el, callback) => {
 
 const Sticker = ({ content, send }) => {
 	const isTgs = content.url.endsWith(".tgs");
+	const isWebm = content.url.endsWith(".webm");
 
 	const tgsRef = (el) => {
 		if (!el || !isTgs || loadedTgsMap.has(el)) return;
@@ -831,6 +845,26 @@ const Sticker = ({ content, send }) => {
 					class="tgs-container"
 					title=${content.body}
 				></div>
+			</div>
+		`;
+	}
+
+	if (isWebm) {
+		return html`
+			<div
+				class="sticker webm-sticker"
+				onClick=${send}
+				data-sticker-id=${content.id}
+			>
+				<video
+					data-src=${makeThumbnailURL(content.url)}
+					autoplay
+					loop
+					muted
+					playsinline
+					title=${content.body}
+					style="width: 100%; height: 100%; object-fit: contain; pointer-events: none;"
+				></video>
 			</div>
 		`;
 	}

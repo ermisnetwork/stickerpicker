@@ -42,14 +42,24 @@ async def reupload_document(
     print(".", end="", flush=True)
 
     is_tgs = document.mime_type == "application/x-tgsticker"
+    is_webm = document.mime_type == "video/webm" or (document.mime_type and document.mime_type.startswith("video/"))
 
     if is_tgs:
+        sticker_ext = "tgs"
+        width, height = 512, 512
+    elif is_webm:
+        sticker_ext = "webm"
         width, height = 512, 512
     else:
-        data, width, height = util.convert_image(data)
+        sticker_ext = ext
+        try:
+            data, width, height = util.convert_image(data)
+        except Exception as e:
+            print(f" (warning: convert_image failed for {document.id}: {e})", end="", flush=True)
+            width, height = 512, 512
+
     print(".", end="", flush=True)
 
-    sticker_ext = "tgs" if is_tgs else ext
     sticker_filename = f"{document.id}.{sticker_ext}"
     sticker_path = os.path.join(output_dir, 'thumbnails', sticker_filename)
     web_relative_path = f"packs/thumbnails/{sticker_filename}"
@@ -122,10 +132,11 @@ async def reupload_pack(
         if not sticker.emoticon:
             continue
         for document_id in sticker.documents:
-            doc = reuploaded_documents[document_id]
-            if doc["body"] == "":
-                doc["body"] = sticker.emoticon
-            doc["telegram"]["emoticons"].append(sticker.emoticon)
+            doc = reuploaded_documents.get(document_id)
+            if doc:
+                if doc.get("body") == "":
+                    doc["body"] = sticker.emoticon
+                doc["telegram"]["emoticons"].append(sticker.emoticon)
 
     with util.open_utf8(pack_path, "w") as pack_file:
         json.dump({
@@ -164,9 +175,9 @@ async def main(args: argparse.Namespace) -> None:
     client = TelegramClient(session_target, 298751, "cb676d6bae20553c9996996a8f52b4d7")
     bot_token = os.environ.get("BOT_TOKEN")
     if bot_token:
-        client.start(bot_token=bot_token)
+        await client.start(bot_token=bot_token)
     else:
-        client.start()
+        await client.start()
 
     if args.list:
         stickers: AllStickers = cast(AllStickers, await client(GetAllStickersRequest(hash=0)))
