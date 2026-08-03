@@ -21,6 +21,7 @@ Thay đổi các biến môi trường trực tiếp trong file `docker-compose.
 | :--- | :--- | :--- |
 | `PORT` | `8080` | Cổng HTTP Server nội bộ của Container |
 | `SECURITY_CODE` | `uhm2026` | Mã bảo mật yêu cầu khi nhập trên giao diện Web |
+| `BOT_TOKEN` | `7633439079:...` | Bot Token Telegram tự động đăng nhập kết nối API |
 
 ---
 

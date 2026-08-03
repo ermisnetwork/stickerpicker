@@ -5,7 +5,8 @@ FROM python:3.11-slim
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     PORT=8080 \
-    SECURITY_CODE=uhm2026
+    SECURITY_CODE=uhm2026 \
+    BOT_TOKEN=7633439079:AAE4ZEViclHi3NE8GB8E39iEOtnd7I5e8lI
 
 # Cài đặt các thư viện hệ thống phụ thuộc
 RUN apt-get update && apt-get install -y --no-install-recommends \

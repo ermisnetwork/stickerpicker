@@ -12,6 +12,7 @@ services:
     environment:
       - PORT=8080
       - SECURITY_CODE=uhm2026
+      - BOT_TOKEN=7633439079:AAE4ZEViclHi3NE8GB8E39iEOtnd7I5e8lI
     volumes:
       # Mount thư mục lưu trữ sticker và file phiên đăng nhập Telegram
       - ./web/packs:/app/web/packs

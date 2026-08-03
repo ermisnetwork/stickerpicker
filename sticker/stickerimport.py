@@ -149,7 +149,11 @@ parser.add_argument("pack", help="Sticker pack URLs to import", action="append",
 
 async def main(args: argparse.Namespace) -> None:
     client = TelegramClient(args.session, 298751, "cb676d6bae20553c9996996a8f52b4d7")
-    await client.start()
+    bot_token = os.environ.get("BOT_TOKEN")
+    if bot_token:
+        await client.start(bot_token=bot_token)
+    else:
+        await client.start()
 
     if args.list:
         stickers: AllStickers = await client(GetAllStickersRequest(hash=0))
