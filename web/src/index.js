@@ -142,18 +142,26 @@ class App extends Component {
 	}
 
 	searchStickers(e) {
-		const sanitizeString = (s) => s.toLowerCase().trim();
+		const sanitizeString = (s) => (s || "").toLowerCase().trim();
 		const searchTerm = sanitizeString(e.target.value);
 
 		const allPacks = [this.state.frequentlyUsed, ...this.state.packs];
-		const packsWithFilteredStickers = allPacks.map((pack) => ({
-			...pack,
-			stickers: pack.stickers.filter(
-				(sticker) =>
-					sanitizeString(sticker.body).includes(searchTerm) ||
-					sanitizeString(sticker.id).includes(searchTerm)
-			),
-		}));
+		const packsWithFilteredStickers = allPacks.map((pack) => {
+			const packTitleMatch =
+				sanitizeString(pack.title).includes(searchTerm) ||
+				sanitizeString(pack.id).includes(searchTerm) ||
+				sanitizeString(pack.telegram?.short_name).includes(searchTerm);
+
+			return {
+				...pack,
+				stickers: pack.stickers.filter(
+					(sticker) =>
+						packTitleMatch ||
+						sanitizeString(sticker.body).includes(searchTerm) ||
+						sanitizeString(sticker.id).includes(searchTerm)
+				),
+			};
+		});
 
 		this.setState({
 			filtering: {
@@ -450,6 +458,156 @@ class App extends Component {
 	}
 }
 
+class ImportPackForm extends Component {
+	constructor(props) {
+		super(props);
+		this.state = {
+			url: "",
+			securityCode: "",
+			ext: "webp",
+			isAnimated: false,
+			loading: false,
+			status: null,
+		};
+		this.handleImport = this.handleImport.bind(this);
+	}
+
+	async handleImport(e) {
+		e.preventDefault();
+		const { url, securityCode, ext, isAnimated } = this.state;
+		if (!url || !securityCode) {
+			this.setState({
+				status: { type: "error", text: "Vui lòng nhập Link Telegram và Mã bảo mật!" },
+			});
+			return;
+		}
+
+		this.setState({ loading: true, status: { type: "info", text: "Đang tải sticker pack về máy..." } });
+
+		try {
+			const res = await fetch("/api/import", {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({
+					url,
+					security_code: securityCode,
+					ext,
+					is_animated: isAnimated,
+				}),
+			});
+			let data = {};
+			try {
+				data = await res.json();
+			} catch (jsonErr) {
+				data = {
+					success: false,
+					error: res.status === 405
+						? "Lỗi 405 (Method Not Allowed): Vui lòng tắt server cũ (python -m http.server) và chạy lệnh `python server.py` để khởi động lại máy chủ!"
+						: `Lỗi máy chủ HTTP ${res.status} (${res.statusText})`,
+				};
+			}
+			if (res.ok && data.success) {
+				this.setState({
+					loading: false,
+					url: "",
+					status: { type: "success", text: "Tải pack thành công! Đã tự động cập nhật." },
+				});
+				if (this.props.app) {
+					this.props.app.reloadPacks();
+				}
+			} else {
+				this.setState({
+					loading: false,
+					status: { type: "error", text: data.error || `Tải pack thất bại (Mã lỗi ${res.status}).` },
+				});
+			}
+		} catch (err) {
+			this.setState({
+				loading: false,
+				status: { type: "error", text: "Lỗi kết nối máy chủ: " + err.message },
+			});
+		}
+	}
+
+	render() {
+		return html`
+			<div class="import-pack-form" style="margin-top: 1.5rem; padding: 1rem; border: 1px solid var(--highlight-color); border-radius: 0.5rem; background-color: rgba(0,0,0,0.05);">
+				<h2 style="margin-top: 0; font-size: 1.1rem;">➕ Thêm Sticker Pack Mới (Telegram)</h2>
+				<form onSubmit=${this.handleImport}>
+					<div style="margin-bottom: 0.75rem;">
+						<label style="display: block; margin-bottom: 0.25rem; font-weight: bold;">Telegram Pack Link:</label>
+						<input
+							type="text"
+							placeholder="https://t.me/addstickers/MonoMemeee"
+							value=${this.state.url}
+							onInput=${(e) => this.setState({ url: e.target.value })}
+							style="width: 100%; padding: 0.5rem; box-sizing: border-box; border-radius: 0.25rem; border: 1px solid #ccc; background-color: var(--search-box-color); color: var(--text-color);"
+							required
+						/>
+					</div>
+					<div style="margin-bottom: 0.75rem;">
+						<label style="display: block; margin-bottom: 0.25rem; font-weight: bold;">Mã bảo mật (Security Code):</label>
+						<input
+							type="password"
+							placeholder="Nhập mã bảo mật"
+							value=${this.state.securityCode}
+							onInput=${(e) => this.setState({ securityCode: e.target.value })}
+							style="width: 100%; padding: 0.5rem; box-sizing: border-box; border-radius: 0.25rem; border: 1px solid #ccc; background-color: var(--search-box-color); color: var(--text-color);"
+							required
+						/>
+					</div>
+					<div style="margin-bottom: 0.75rem; display: flex; gap: 1rem; align-items: center; flex-wrap: wrap;">
+						<label>
+							<input
+								type="checkbox"
+								checked=${this.state.isAnimated}
+								onChange=${(e) => this.setState({ isAnimated: e.target.checked })}
+							/>
+							Sticker Động (Animated TGS)
+						</label>
+						${!this.state.isAnimated
+							? html`
+									<label>
+										Định dạng:
+										<select
+											value=${this.state.ext}
+											onChange=${(e) => this.setState({ ext: e.target.value })}
+											style="margin-left: 0.5rem; padding: 0.2rem; background-color: var(--search-box-color); color: var(--text-color);"
+										>
+											<option value="webp">WebP</option>
+											<option value="png">PNG</option>
+											<option value="jpg">JPG</option>
+										</select>
+									</label>
+							  `
+							: null}
+					</div>
+					<button
+						type="submit"
+						disabled=${this.state.loading}
+						style="padding: 0.6rem 1.2rem; background-color: #28a745; color: white; border: none; border-radius: 0.25rem; cursor: pointer; font-weight: bold;"
+					>
+						${this.state.loading ? "Đang tải về..." : "Tải Sticker Pack"}
+					</button>
+				</form>
+				${this.state.status
+					? html`
+							<div
+								style="margin-top: 0.75rem; padding: 0.5rem; border-radius: 0.25rem; color: white; background-color: ${this.state.status.type === "success"
+									? "#28a745"
+									: this.state.status.type === "info"
+									? "#17a2b8"
+									: "#dc3545"};"
+							>
+								${this.state.status.text}
+							</div>
+					  `
+					: null}
+			</div>
+		`;
+	}
+}
+
 const Settings = ({ app }) => html`
 	<section
 		class="stickerpack settings"
@@ -486,6 +644,7 @@ const Settings = ({ app }) => html`
 					<option value="black">Black</option>
 				</select>
 			</div>
+			<${ImportPackForm} app=${app} />
 		</div>
 	</section>
 `;

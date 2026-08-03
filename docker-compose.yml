@@ -1,0 +1,18 @@
+version: '3.8'
+
+services:
+  stickerpicker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: stickerpicker
+    restart: always
+    ports:
+      - "8080:8080"
+    environment:
+      - PORT=8080
+      - SECURITY_CODE=uhm2026
+    volumes:
+      # Mount thư mục lưu trữ sticker và file phiên đăng nhập Telegram
+      - ./web/packs:/app/web/packs
+      - ./sticker-import.session:/app/sticker-import.session

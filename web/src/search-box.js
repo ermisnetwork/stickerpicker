@@ -19,7 +19,7 @@ export const SearchBox = ({
 	onInput,
 	onKeyUp,
 	value,
-	placeholder = "Find stickers",
+	placeholder = "Search stickers or pack name...",
 }) => {
 	const component = html`
 		<div class="search-box">
