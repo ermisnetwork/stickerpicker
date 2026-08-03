@@ -13,7 +13,7 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
-from typing import Dict, Tuple
+from typing import Dict, Tuple, Any, cast
 import argparse
 import asyncio
 import os.path
@@ -23,7 +23,7 @@ import re
 from telethon import TelegramClient
 from telethon.tl.functions.messages import GetAllStickersRequest, GetStickerSetRequest
 from telethon.tl.types.messages import AllStickers
-from telethon.tl.types import InputStickerSetShortName, Document, DocumentAttributeSticker
+from telethon.tl.types import InputStickerSetShortName, Document, DocumentEmpty, DocumentAttributeSticker
 from telethon.tl.types.messages import StickerSet as StickerSetFull
 
 from .lib import util  # Assuming util has helper functions like convert_image
@@ -35,7 +35,10 @@ async def reupload_document(
     ext: str
 ) -> Tuple[Dict, bytes]:
     print(f"Downloading {document.id}", end="", flush=True)
-    data = await client.download_media(document, file=bytes)
+    downloaded = await client.download_media(cast(Any, document), file=cast(Any, bytes))
+    if not isinstance(downloaded, bytes):
+        raise RuntimeError(f"Failed to download media for document {document.id}")
+    data: bytes = downloaded
     print(".", end="", flush=True)
 
     is_tgs = document.mime_type == "application/x-tgsticker"
@@ -105,13 +108,15 @@ async def reupload_pack(
     stickers_data: Dict[str, bytes] = {}
     reuploaded_documents: Dict[int, Dict] = {}
     for document in pack.documents:
+        if not isinstance(document, Document):
+            continue
         try:
             reuploaded_documents[document.id] = already_uploaded[document.id]
             print(f"Skipped processing {document.id}")
         except KeyError:
             reuploaded_documents[document.id], data = await reupload_document(client, document, output_dir, ext)
+            stickers_data[reuploaded_documents[document.id]["url"]] = data
         add_meta(document, reuploaded_documents[document.id], pack)
-        stickers_data[reuploaded_documents[document.id]["url"]] = data
 
     for sticker in pack.packs:
         if not sticker.emoticon:
@@ -148,15 +153,23 @@ parser.add_argument("--ext", help="Output image format (png, webp, or jpg)", cho
 parser.add_argument("pack", help="Sticker pack URLs to import", action="append", nargs="*")
 
 async def main(args: argparse.Namespace) -> None:
-    client = TelegramClient(args.session, 298751, "cb676d6bae20553c9996996a8f52b4d7")
+    session_path = os.environ.get("SESSION_PATH", args.session)
+    if os.path.isdir(session_path):
+        session_target = os.path.join(session_path, "session")
+    elif os.path.isdir(f"{session_path}.session"):
+        session_target = os.path.join(f"{session_path}.session", "session")
+    else:
+        session_target = session_path
+
+    client = TelegramClient(session_target, 298751, "cb676d6bae20553c9996996a8f52b4d7")
     bot_token = os.environ.get("BOT_TOKEN")
     if bot_token:
-        await client.start(bot_token=bot_token)
+        client.start(bot_token=bot_token)
     else:
-        await client.start()
+        client.start()
 
     if args.list:
-        stickers: AllStickers = await client(GetAllStickersRequest(hash=0))
+        stickers: AllStickers = cast(AllStickers, await client(GetAllStickersRequest(hash=0)))
         index = 1
         width = len(str(len(stickers.sets)))
         print("Your saved sticker packs:")
@@ -173,12 +186,12 @@ async def main(args: argparse.Namespace) -> None:
                 return
             input_packs.append(InputStickerSetShortName(short_name=match.group(1)))
         for input_pack in input_packs:
-            pack: StickerSetFull = await client(GetStickerSetRequest(input_pack, hash=0))
+            pack: StickerSetFull = cast(StickerSetFull, await client(GetStickerSetRequest(input_pack, hash=0)))
             await reupload_pack(client, pack, args.output_dir, args.ext)
     else:
         parser.print_help()
 
-    await client.disconnect()
+    await cast(Any, client.disconnect())
 
 def cmd() -> None:
     asyncio.run(main(parser.parse_args()))
