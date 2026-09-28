@@ -34,6 +34,14 @@ class StickerPickerHandler(http.server.SimpleHTTPRequestHandler):
         self.send_header("Access-Control-Allow-Origin", "*")
         self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
         self.send_header("Access-Control-Allow-Headers", "Content-Type")
+
+        # Chống cache mã nguồn JavaScript, HTML và cấu hình Sticker Packs JSON
+        clean_path = self.path.split("?")[0].rstrip("/")
+        if clean_path.endswith((".js", ".json", ".html")) or clean_path in ["", "/"]:
+            self.send_header("Cache-Control", "no-cache, no-store, must-revalidate")
+            self.send_header("Pragma", "no-cache")
+            self.send_header("Expires", "0")
+
         super().end_headers()
 
     def do_OPTIONS(self):

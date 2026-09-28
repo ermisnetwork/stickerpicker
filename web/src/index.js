@@ -241,16 +241,19 @@ class App extends Component {
 						});
 					}
 					const packData = await packRes.json();
+					const seenInPack = new Set();
 					for (let i = 0; i < packData.stickers.length; i++) {
 						const sticker = packData.stickers[i];
 						if (
 							!sticker.id ||
+							seenInPack.has(sticker.id) ||
 							(this.stickersByID.has(sticker.id) &&
 								this.stickersByID.get(sticker.id)?.url !== sticker.url)
 						) {
 							const safeUrl = (sticker.url || "").replace(/[^a-zA-Z0-9_-]/g, "_");
 							sticker.id = `${packData.id || "pack"}_${sticker.id || "stk"}_${safeUrl || i}`;
 						}
+						seenInPack.add(sticker.id);
 						this.stickersByID.set(sticker.id, sticker);
 					}
 					this.setState({
