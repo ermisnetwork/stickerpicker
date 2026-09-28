@@ -241,7 +241,16 @@ class App extends Component {
 						});
 					}
 					const packData = await packRes.json();
-					for (const sticker of packData.stickers) {
+					for (let i = 0; i < packData.stickers.length; i++) {
+						const sticker = packData.stickers[i];
+						if (
+							!sticker.id ||
+							(this.stickersByID.has(sticker.id) &&
+								this.stickersByID.get(sticker.id)?.url !== sticker.url)
+						) {
+							const safeUrl = (sticker.url || "").replace(/[^a-zA-Z0-9_-]/g, "_");
+							sticker.id = `${packData.id || "pack"}_${sticker.id || "stk"}_${safeUrl || i}`;
+						}
 						this.stickersByID.set(sticker.id, sticker);
 					}
 					this.setState({
@@ -340,13 +349,30 @@ class App extends Component {
 		this.sectionObserver.disconnect();
 	}
 
-	sendSticker(evt) {
-		evt.preventDefault();
-		evt.stopPropagation();
+	sendSticker(stickerOrEvt, maybeEvt) {
+		let sticker = null;
+		let evt = null;
 
-		const id = evt.currentTarget.getAttribute("data-sticker-id");
-		const sticker = this.stickersByID.get(id);
-		frequent.add(id);
+		if (stickerOrEvt && typeof stickerOrEvt.preventDefault === "function") {
+			evt = stickerOrEvt;
+		} else {
+			sticker = stickerOrEvt;
+			evt = maybeEvt;
+		}
+
+		if (evt) {
+			evt.preventDefault();
+			evt.stopPropagation();
+		}
+
+		if (!sticker && evt && evt.currentTarget) {
+			const id = evt.currentTarget.getAttribute("data-sticker-id");
+			sticker = this.stickersByID.get(id);
+		}
+
+		if (!sticker) return;
+
+		frequent.add(sticker.id);
 		this.updateFrequentlyUsed();
 		widgetAPI.sendSticker(sticker);
 
@@ -763,9 +789,9 @@ const Pack = ({ pack, send }) => html`
 		<h1>${pack.title}</h1>
 		<div class="sticker-list">
 			${pack.stickers.map(
-				(sticker) => html`
+				(sticker, idx) => html`
 					<${Sticker}
-						key=${sticker.id}
+						key=${sticker.id ? `${sticker.id}_${idx}` : idx}
 						content=${sticker}
 						send=${send}
 					/>
@@ -796,6 +822,7 @@ const observeWhenVisible = (el, callback) => {
 const Sticker = ({ content, send }) => {
 	const isTgs = content.url.endsWith(".tgs");
 	const isWebm = content.url.endsWith(".webm");
+	const handleClick = (e) => send(content, e);
 
 	const tgsRef = (el) => {
 		if (!el || !isTgs || loadedTgsMap.has(el)) return;
@@ -837,7 +864,7 @@ const Sticker = ({ content, send }) => {
 		return html`
 			<div
 				class="sticker tgs-sticker"
-				onClick=${send}
+				onClick=${handleClick}
 				data-sticker-id=${content.id}
 			>
 				<div
@@ -853,7 +880,7 @@ const Sticker = ({ content, send }) => {
 		return html`
 			<div
 				class="sticker webm-sticker"
-				onClick=${send}
+				onClick=${handleClick}
 				data-sticker-id=${content.id}
 			>
 				<video
@@ -870,7 +897,7 @@ const Sticker = ({ content, send }) => {
 	}
 
 	return html`
-		<div class="sticker" onClick=${send} data-sticker-id=${content.id}>
+		<div class="sticker" onClick=${handleClick} data-sticker-id=${content.id}>
 			<img
 				loading="lazy"
 				data-src=${makeThumbnailURL(content.url)}
